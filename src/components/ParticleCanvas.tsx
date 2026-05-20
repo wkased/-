@@ -68,12 +68,13 @@ export default function ParticleCanvas({
     return () => resizeObserver.disconnect();
   }, []);
 
-  // Sync Canvas width/height with state
+  // Sync Canvas width/height with state - high definition retina scaling
   useEffect(() => {
     const canvas = canvasRef.current;
     if (canvas) {
-      canvas.width = dimensions.width;
-      canvas.height = dimensions.height;
+      const dpr = typeof window !== 'undefined' ? Math.max(2, window.devicePixelRatio || 2) : 2;
+      canvas.width = dimensions.width * dpr;
+      canvas.height = dimensions.height * dpr;
     }
   }, [dimensions]);
 
@@ -288,7 +289,12 @@ export default function ParticleCanvas({
 
       console.log('Using MediaRecorder mimeType:', options.mimeType);
 
-      const mediaRecorder = new MediaRecorder(stream, options);
+      const recorderOptions: MediaRecorderOptions = {
+        mimeType: options.mimeType,
+        videoBitsPerSecond: 15000000, // Boost bitrate to 15 Mbps for ultra-clear high-definition crispness
+      };
+
+      const mediaRecorder = new MediaRecorder(stream, recorderOptions);
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) {
@@ -471,6 +477,12 @@ export default function ParticleCanvas({
       const dt = Math.min(50, timestamp - lastTime); // cap dt
       lastTime = timestamp;
 
+      const dpr = typeof window !== 'undefined' ? Math.max(2, window.devicePixelRatio || 2) : 2;
+
+      // Wrap drawing inside a high-definition scaled context
+      ctx.save();
+      ctx.scale(dpr, dpr);
+
       // Dark futuristic decay overlay for neon particle trails
       ctx.fillStyle = 'rgba(15, 23, 42, 0.25)';
       ctx.fillRect(0, 0, dimensions.width, dimensions.height);
@@ -598,6 +610,9 @@ export default function ParticleCanvas({
       ctx.fillText(modeText, 16, dimensions.height - 16);
       ctx.restore();
 
+      // Restore outer context transform scale
+      ctx.restore();
+
       // Trigger stats update once in a while to save performance
       blendTimer += dt;
       if (blendTimer > 300) {
@@ -663,11 +678,11 @@ export default function ParticleCanvas({
             <button
               onClick={startRecordingVideo}
               className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-[11px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_10px_rgba(99,102,241,0.2)] hover:scale-[1.02]"
-              title="开始录置轨道自动巡航动画（至多 45 秒，导出 MP4 格式视频）"
+              title="开始录制轨道自动巡航动画（至多 45 秒，导出超清 High-Definition MP4 格式视频）"
               id="btn-rec-start"
             >
               <Video className="w-3.5 h-3.5 text-indigo-300" />
-              <span>录制整个巡航 (MP4)</span>
+              <span>超清录制整个巡航 (HD MP4)</span>
             </button>
           )}
 
