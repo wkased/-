@@ -5,9 +5,15 @@ import ParticleCanvas from './components/ParticleCanvas';
 import StationPanel from './components/StationPanel';
 import ControlPanel from './components/ControlPanel';
 import NarrativePanel from './components/NarrativePanel';
+import ColorFactoryPanel from './components/ColorFactoryPanel';
 import { Train, Sparkles, RefreshCw, BarChart2, Github, HelpCircle, Layers } from 'lucide-react';
 
 export default function App() {
+  const [celadonColors, setCeladonColors] = useState<string[]>(['#4a7c73', '#5c938c', '#74aba2', '#8ec2b9']);
+  const [yangmeiColors, setYangmeiColors] = useState<string[]>(['#5c2045', '#862149', '#b23363', '#d64a7c']);
+  const [applianceColors, setApplianceColors] = useState<string[]>(['#2a2b2e', '#4e4f52', '#7a7b80', '#3b729f']);
+  const [stations, setStations] = useState<Station[]>(STATION_PRESETS);
+
   const [ratios, setRatios] = useState({
     celadon: 70,
     yangmei: 20,
@@ -76,7 +82,6 @@ export default function App() {
   // Periodic automatic railway progress logic
   useEffect(() => {
     if (isAutoRiding) {
-      const stations = STATION_PRESETS;
       let currentIndex = stations.findIndex((s) => s.id === currentStationId);
 
       const runNextLeg = () => {
@@ -96,7 +101,7 @@ export default function App() {
     return () => {
       if (autoRideIntervalRef.current) clearInterval(autoRideIntervalRef.current);
     };
-  }, [isAutoRiding, currentStationId]);
+  }, [isAutoRiding, currentStationId, stations]);
 
   // Clean timeouts on component unmount
   useEffect(() => {
@@ -108,8 +113,9 @@ export default function App() {
 
   // Trigger default initial animation burst on mount
   useEffect(() => {
-    const defaultStation = STATION_PRESETS[0];
-    animateStationTransition(defaultStation);
+    if (stations.length > 0) {
+      animateStationTransition(stations[0]);
+    }
   }, []);
 
   // Trigger absolute random manual kinetic diffusion burst
@@ -273,6 +279,9 @@ export default function App() {
               applianceSize={sizes.appliance}
               mode={activeMode}
               speedFactor={speedFactor}
+              celadonColors={celadonColors}
+              yangmeiColors={yangmeiColors}
+              applianceColors={applianceColors}
               onStatsUpdate={setStats}
             />
 
@@ -323,6 +332,23 @@ export default function App() {
             onSelectStation={handleSelectStation}
             isAutoRiding={isAutoRiding}
             onToggleAutoRide={() => setIsAutoRiding(!isAutoRiding)}
+            stations={stations}
+          />
+        </section>
+
+        {/* Dynamic Color Factory Customization Panel display */}
+        <section>
+          <ColorFactoryPanel
+            celadonColors={celadonColors}
+            setCeladonColors={setCeladonColors}
+            yangmeiColors={yangmeiColors}
+            setYangmeiColors={setYangmeiColors}
+            applianceColors={applianceColors}
+            setApplianceColors={setApplianceColors}
+            stations={stations}
+            setStations={setStations}
+            onApplyPreset={animateStationTransition}
+            currentStationId={currentStationId}
           />
         </section>
       </main>

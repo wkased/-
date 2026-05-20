@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Particle, ParticleType } from '../types';
+import { Video, Camera } from 'lucide-react';
 
 interface ParticleCanvasProps {
   celadonRatio: number; // 0 to 100
@@ -10,6 +11,9 @@ interface ParticleCanvasProps {
   applianceSize: number;
   mode: 'idle' | 'diffusion' | 'gather' | 'circle' | 'solid_circle' | 'chaos';
   speedFactor: number;
+  celadonColors: string[];
+  yangmeiColors: string[];
+  applianceColors: string[];
   onStatsUpdate?: (stats: {
     total: number;
     celadonCount: number;
@@ -20,28 +24,6 @@ interface ParticleCanvasProps {
   }) => void;
 }
 
-// Particle color tables matching the visual identity spec
-const CELLADON_COLORS = [
-  '#4a7c73', // 青灰 (Celadon Grey)
-  '#5c938c', // 湖蓝/青绿 (Lake Blue-green)
-  '#74aba2', // 秘色 (Mise / Secret color)
-  '#8ec2b9', // Warm pale celadon
-];
-
-const YANGMEI_COLORS = [
-  '#5c2045', // 乌紫 (Dark Violet Plum)
-  '#862149', // 玫红 (Deep Magenta)
-  '#b23363', // Rose Pink
-  '#d64a7c', // Water Plum Blue-Pink
-];
-
-const APPLIANCE_COLORS = [
-  '#2a2b2e', // 深灰 (Dark Gray)
-  '#4e4f52', // 银灰 (Silver Gray)
-  '#7a7b80', // Medium metal gray
-  '#3b729f', // 科技蓝 (Tech Blue accent)
-];
-
 export default function ParticleCanvas({
   celadonRatio,
   yangmeiRatio,
@@ -51,6 +33,9 @@ export default function ParticleCanvas({
   applianceSize,
   mode,
   speedFactor,
+  celadonColors,
+  yangmeiColors,
+  applianceColors,
   onStatsUpdate,
 }: ParticleCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -59,6 +44,13 @@ export default function ParticleCanvas({
   const animationFrameId = useRef<number | null>(null);
 
   const [dimensions, setDimensions] = useState({ width: 600, height: 450 });
+
+  // Recording feature internal states
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Handle Resize using ResizeObserver
   useEffect(() => {
@@ -85,8 +77,8 @@ export default function ParticleCanvas({
     }
   }, [dimensions]);
 
-  // Generate / adjust particle population based on user ratios and sizes
-  const regenerateParticles = (targetCount = 400) => {
+  // Generate / adjust particle population based on user ratios, sizes, and colors
+  const regenerateParticles = (targetCount = 450) => {
     const currentParticles = particlesRef.current;
     const { width, height } = dimensions;
     const cx = width / 2;
@@ -99,32 +91,37 @@ export default function ParticleCanvas({
 
     const nextParticles: Particle[] = [];
 
+    // Ensure we have some safe fallbacks for colors if empty arrays are passed
+    const safeCeladon = celadonColors.length > 0 ? celadonColors : ['#4a7c73', '#74aba2'];
+    const safeYangmei = yangmeiColors.length > 0 ? yangmeiColors : ['#862149', '#b23363'];
+    const safeAppliance = applianceColors.length > 0 ? applianceColors : ['#4e4f52', '#3b729f'];
+
     for (let i = 0; i < targetCount; i++) {
       const rand = Math.random();
       let type: ParticleType = 'celadon';
       let shape: 'octagon' | 'circle' | 'hexagon' = 'octagon';
       let baseSize = celadonSize;
-      let colors = CELLADON_COLORS;
+      let colors = safeCeladon;
 
       if (rand < cLim) {
         type = 'celadon';
         shape = 'octagon';
         baseSize = celadonSize;
-        colors = CELLADON_COLORS;
+        colors = safeCeladon;
       } else if (rand < yLim) {
         type = 'yangmei';
         shape = 'circle';
         baseSize = yangmeiSize;
-        colors = YANGMEI_COLORS;
+        colors = safeYangmei;
       } else {
         type = 'appliance';
         shape = 'hexagon';
         baseSize = applianceSize;
-        colors = APPLIANCE_COLORS;
+        colors = safeAppliance;
       }
 
-      // Pick a random color from the tier list
-      const color = colors[Math.floor(Math.random() * colors.length)];
+      // Pick a random color from the current dynamic array
+      const color = colors[Math.floor(Math.random() * colors.length)] || '#cccccc';
 
       // Position: Spread out if the current population was empty, else reuse or morph
       const existing = currentParticles[i];
@@ -150,7 +147,7 @@ export default function ParticleCanvas({
       }
 
       // Slightly vary particle individual sizes
-      const size = Math.max(2, baseSize * (0.6 + Math.random() * 0.8));
+      const size = Math.max(1.8, baseSize * (0.65 + Math.random() * 0.7));
 
       nextParticles.push({
         id: i,
@@ -173,10 +170,10 @@ export default function ParticleCanvas({
     particlesRef.current = nextParticles;
   };
 
-  // Trigger regeneration on ratio/size adjustments
+  // Trigger regeneration on ratio/size/color adjustments
   useEffect(() => {
     regenerateParticles(450);
-  }, [celadonRatio, yangmeiRatio, applianceRatio, celadonSize, yangmeiSize, applianceSize, dimensions.width, dimensions.height]);
+  }, [celadonRatio, yangmeiRatio, applianceRatio, celadonSize, yangmeiSize, applianceSize, dimensions.width, dimensions.height, celadonColors, yangmeiColors, applianceColors]);
 
   // Adjust particle targets based on Active Modes
   useEffect(() => {
@@ -251,6 +248,116 @@ export default function ParticleCanvas({
       });
     }
   }, [mode, dimensions]);
+
+  // Clean recording timers on unmount
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    };
+  }, []);
+
+  // MP4/WebM Live Video Capturer using standard MediaRecorder with generous cruising limit
+  const startRecordingVideo = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    recordedChunksRef.current = [];
+    setRecordingSeconds(0);
+
+    try {
+      // Capture at ~30 frames per second
+      const stream = canvas.captureStream(30);
+      
+      // Determine the best compatible container format, defaulting to video/mp4 where available
+      let options = { mimeType: 'video/mp4;codecs=h264' };
+      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+        options = { mimeType: 'video/mp4;codecs=avc1' };
+      }
+      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+        options = { mimeType: 'video/mp4' };
+      }
+      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+        options = { mimeType: 'video/webm;codecs=h264' };
+      }
+      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+        options = { mimeType: 'video/webm;codecs=vp9' };
+      }
+      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+        options = { mimeType: 'video/webm' };
+      }
+
+      console.log('Using MediaRecorder mimeType:', options.mimeType);
+
+      const mediaRecorder = new MediaRecorder(stream, options);
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          recordedChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        // Build the blob stream explicitly preserving the designated mimeType
+        const actualType = mediaRecorder.mimeType || 'video/mp4';
+        const blob = new Blob(recordedChunksRef.current, { type: actualType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        // Always name with .mp4 suffix for standard video players compatibility
+        a.download = `metro-particle-cruise-${Date.now()}.mp4`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setIsRecording(false);
+        if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      };
+
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+      setIsRecording(true);
+
+      let secondsElapsed = 0;
+      const MAX_CRUISE_RECORDING_SECONDS = 45; // 45 seconds gives ample time for the complete 28.5s auto cruise cycle
+
+      recordingTimerRef.current = setInterval(() => {
+        secondsElapsed += 1;
+        setRecordingSeconds(secondsElapsed);
+        if (secondsElapsed >= MAX_CRUISE_RECORDING_SECONDS) {
+          if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.stop();
+          }
+        }
+      }, 1000);
+
+    } catch (error) {
+      console.error('Failed to capture canvas dynamic stream:', error);
+      alert('您的浏览器可能限制了 canvas.captureStream API。已为您降级为静态截图下载模块，或可以使用 Chrome/Safari 等现代浏览器。');
+    }
+  };
+
+  const stopRecordingVideo = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
+  const downloadSnapshot = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    try {
+      const dataUrl = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `particle-system-snapshot-${Date.now()}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('Failed to construct capture download data:', err);
+    }
+  };
 
   // Render & Physics Tick Loop
   useEffect(() => {
@@ -329,7 +436,7 @@ export default function ParticleCanvas({
         else if (p.type === 'yangmei') yangmeiCount++;
         else if (p.type === 'appliance') applianceCount++;
 
-        // Helper to convert hex to rgb
+        // Convert hex to rgb
         const hex = p.color;
         const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
         if (result) {
@@ -340,7 +447,7 @@ export default function ParticleCanvas({
         }
       });
 
-      // Calculate the gorgeous weighted blend color of the whole region!
+      // Calculate the gorgeous weighted blend color of the whole active space
       let blendedColor = '#709a95'; // default
       if (validColorCount > 0) {
         const avgR = Math.round(sumR / validColorCount);
@@ -364,8 +471,8 @@ export default function ParticleCanvas({
       const dt = Math.min(50, timestamp - lastTime); // cap dt
       lastTime = timestamp;
 
-      // Dark futuristic overlay to allow subtle neon trails
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.25)'; // slate-900 with nice transparent decay
+      // Dark futuristic decay overlay for neon particle trails
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.25)';
       ctx.fillRect(0, 0, dimensions.width, dimensions.height);
 
       const list = particlesRef.current;
@@ -396,7 +503,6 @@ export default function ParticleCanvas({
           // Swift tight interpolation to targeted positions
           p.x += (p.targetX - p.x) * (0.05 * sp);
           p.y += (p.targetY - p.y) * (0.05 * sp);
-          // Friction to settle
           p.vx = 0;
           p.vy = 0;
         } else if (mode === 'chaos') {
@@ -415,12 +521,11 @@ export default function ParticleCanvas({
           const dy = p.y - cy;
           const dist = Math.sqrt(dx * dx + dy * dy) || 1;
           
-          // Tangential orbital velocity + radial correction to stay inside a bounds
           const orbitForce = 0.4 * speedFactor;
           const tx = -dy / dist;
           const ty = dx / dist;
 
-          // add slight noise
+          // Add slight noise
           p.vx += (tx * orbitForce + (Math.random() - 0.5) * 0.2 - dx * 0.0001) * 0.05;
           p.vy += (ty * orbitForce + (Math.random() - 0.5) * 0.2 - dy * 0.0001) * 0.05;
 
@@ -448,28 +553,22 @@ export default function ParticleCanvas({
         // Dynamic sizing factor per-particle based on active mode and particle type
         let sizeScale = 1.0;
         if (mode === 'diffusion') {
-          // Celadon balloons, yangmei breaks to tiny embers, appliance grows a bit
           if (p.type === 'celadon') sizeScale = 1.7;
           else if (p.type === 'yangmei') sizeScale = 0.55;
           else if (p.type === 'appliance') sizeScale = 1.35;
         } else if (mode === 'gather') {
-          // Celadon shrinks, yangmei expands, appliance shrinks slightly
           if (p.type === 'celadon') sizeScale = 0.5;
           else if (p.type === 'yangmei') sizeScale = 1.8;
           else if (p.type === 'appliance') sizeScale = 0.8;
         } else if (mode === 'solid_circle') {
-          // Solid packed circle slightly breathes to show vibrant organic force
           const freq = p.type === 'celadon' ? 0.003 : p.type === 'yangmei' ? 0.004 : 0.002;
           sizeScale = 0.95 + 0.15 * Math.sin(timestamp * freq + p.id);
         } else if (mode === 'circle') {
-          // Hollow ring holds steady sizes
           sizeScale = 1.05;
         } else if (mode === 'chaos') {
-          // Dynamic high energy collision sizing
           const rate = p.type === 'celadon' ? 0.006 : p.type === 'yangmei' ? 0.008 : 0.005;
           sizeScale = 0.7 + 0.65 * Math.sin(timestamp * rate + p.id * 0.5);
         } else {
-          // Idle floating swirly gentle breathing
           const rate = p.type === 'celadon' ? 0.002 : p.type === 'yangmei' ? 0.0025 : 0.0015;
           sizeScale = 0.95 + 0.15 * Math.sin(timestamp * rate + p.id * 0.2);
         }
@@ -516,12 +615,12 @@ export default function ParticleCanvas({
         cancelAnimationFrame(animationFrameId.current);
       }
     };
-  }, [dimensions, mode, speedFactor, onStatsUpdate]);
+  }, [dimensions, mode, speedFactor, onStatsUpdate, celadonColors, yangmeiColors, applianceColors]);
 
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-[460px] md:h-[500px] rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 shadow-2xl flex items-center justify-center"
+      className="relative w-full h-[460px] md:h-[500px] rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 shadow-2xl flex items-center justify-center group"
       id="particle-canvas-container"
     >
       {/* Absolute canvas inside */}
@@ -537,6 +636,51 @@ export default function ParticleCanvas({
       </div>
       <div className="absolute top-4 right-4 font-mono text-[10px] text-pink-400 select-none pointer-events-none opacity-80 backdrop-blur-md bg-slate-900/60 px-2 py-1 rounded border border-slate-800/80">
         FP60_ACCEL : ACTIVE
+      </div>
+
+      {/* Live Recording Panel Overlay is nested beautifully here */}
+      <div className="absolute bottom-4 left-4 right-4 flex flex-col sm:flex-row justify-between items-center gap-3 bg-slate-900/90 backdrop-blur-md p-3 rounded-xl border border-slate-850 shadow-2xl pointer-events-auto transition-all duration-300">
+        <div className="flex items-center gap-2">
+          <div className={`w-2.5 h-2.5 rounded-full ${isRecording ? 'bg-red-500 animate-ping' : 'bg-emerald-500'}`} />
+          <span className="text-[11px] font-mono font-medium text-slate-300">
+            {isRecording 
+              ? `🔴 录制整个巡航中 (${recordingSeconds}s / 45s)...` 
+              : '数字时空叙事与多站点自动巡航捕捉就绪'
+            }
+          </span>
+        </div>
+        <div className="flex items-center gap-2 max-sm:w-full max-sm:justify-end">
+          {isRecording ? (
+            <button
+              onClick={stopRecordingVideo}
+              className="px-3 py-1.5 rounded-lg bg-red-650 hover:bg-red-600 text-white font-mono text-[11px] font-semibold flex items-center gap-1.5 transition-all shadow-[0_0_12px_rgba(239,68,68,0.25)] cursor-pointer"
+              id="btn-rec-stop"
+            >
+              <span className="w-2 h-2 bg-white rounded-sm" />
+              <span>停止并下载 MP4 视频</span>
+            </button>
+          ) : (
+            <button
+              onClick={startRecordingVideo}
+              className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-[11px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_10px_rgba(99,102,241,0.2)] hover:scale-[1.02]"
+              title="开始录置轨道自动巡航动画（至多 45 秒，导出 MP4 格式视频）"
+              id="btn-rec-start"
+            >
+              <Video className="w-3.5 h-3.5 text-indigo-300" />
+              <span>录制整个巡航 (MP4)</span>
+            </button>
+          )}
+
+          <button
+            onClick={downloadSnapshot}
+            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 font-mono text-[11px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer hover:scale-[1.02]"
+            title="捕获当前画布帧导出高清 PNG 贴图"
+            id="btn-canvas-snapshot"
+          >
+            <Camera className="w-3.5 h-3.5 text-cyan-400" />
+            <span>瞬态截图 (PNG)</span>
+          </button>
+        </div>
       </div>
     </div>
   );

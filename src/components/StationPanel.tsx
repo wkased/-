@@ -7,6 +7,7 @@ interface StationPanelProps {
   onSelectStation: (station: Station) => void;
   isAutoRiding: boolean;
   onToggleAutoRide: () => void;
+  stations: Station[];
 }
 
 export default function StationPanel({
@@ -14,6 +15,7 @@ export default function StationPanel({
   onSelectStation,
   isAutoRiding,
   onToggleAutoRide,
+  stations,
 }: StationPanelProps) {
   return (
     <div
@@ -72,7 +74,7 @@ export default function StationPanel({
 
         {/* Station Stops Map */}
         <div className="grid grid-cols-3 gap-4 relative z-10">
-          {STATION_PRESETS.map((station, index) => {
+          {stations.map((station, index) => {
             const isSelected = station.id === currentStationId;
             let themeDotColor = 'border-teal-500 bg-teal-950 text-teal-300';
             if (station.id === 'middle') {
@@ -129,7 +131,7 @@ export default function StationPanel({
 
       {/* Active Station Detail Info Display Card */}
       {(() => {
-        const activeStation = STATION_PRESETS.find((s) => s.id === currentStationId);
+        const activeStation = stations.find((s) => s.id === currentStationId);
         if (!activeStation) return null;
 
         // Visual gradients/indicators
