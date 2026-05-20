@@ -1,0 +1,543 @@
+import { useEffect, useRef, useState } from 'react';
+import { Particle, ParticleType } from '../types';
+
+interface ParticleCanvasProps {
+  celadonRatio: number; // 0 to 100
+  yangmeiRatio: number;   // 0 to 100
+  applianceRatio: number; // 0 to 100
+  celadonSize: number;    // base size
+  yangmeiSize: number;
+  applianceSize: number;
+  mode: 'idle' | 'diffusion' | 'gather' | 'circle' | 'solid_circle' | 'chaos';
+  speedFactor: number;
+  onStatsUpdate?: (stats: {
+    total: number;
+    celadonCount: number;
+    yangmeiCount: number;
+    applianceCount: number;
+    averageSize: number;
+    blendedColor: string;
+  }) => void;
+}
+
+// Particle color tables matching the visual identity spec
+const CELLADON_COLORS = [
+  '#4a7c73', // 青灰 (Celadon Grey)
+  '#5c938c', // 湖蓝/青绿 (Lake Blue-green)
+  '#74aba2', // 秘色 (Mise / Secret color)
+  '#8ec2b9', // Warm pale celadon
+];
+
+const YANGMEI_COLORS = [
+  '#5c2045', // 乌紫 (Dark Violet Plum)
+  '#862149', // 玫红 (Deep Magenta)
+  '#b23363', // Rose Pink
+  '#d64a7c', // Water Plum Blue-Pink
+];
+
+const APPLIANCE_COLORS = [
+  '#2a2b2e', // 深灰 (Dark Gray)
+  '#4e4f52', // 银灰 (Silver Gray)
+  '#7a7b80', // Medium metal gray
+  '#3b729f', // 科技蓝 (Tech Blue accent)
+];
+
+export default function ParticleCanvas({
+  celadonRatio,
+  yangmeiRatio,
+  applianceRatio,
+  celadonSize,
+  yangmeiSize,
+  applianceSize,
+  mode,
+  speedFactor,
+  onStatsUpdate,
+}: ParticleCanvasProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const particlesRef = useRef<Particle[]>([]);
+  const animationFrameId = useRef<number | null>(null);
+
+  const [dimensions, setDimensions] = useState({ width: 600, height: 450 });
+
+  // Handle Resize using ResizeObserver
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        const { width, height } = entry.contentRect;
+        setDimensions({
+          width: Math.max(width, 300),
+          height: Math.max(height, 250),
+        });
+      }
+    });
+    resizeObserver.observe(containerRef.current);
+    return () => resizeObserver.disconnect();
+  }, []);
+
+  // Sync Canvas width/height with state
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      canvas.width = dimensions.width;
+      canvas.height = dimensions.height;
+    }
+  }, [dimensions]);
+
+  // Generate / adjust particle population based on user ratios and sizes
+  const regenerateParticles = (targetCount = 400) => {
+    const currentParticles = particlesRef.current;
+    const { width, height } = dimensions;
+    const cx = width / 2;
+    const cy = height / 2;
+
+    // Normalize ratios represented as custom percentages
+    const totalRatio = celadonRatio + yangmeiRatio + applianceRatio;
+    const cLim = celadonRatio / (totalRatio || 1);
+    const yLim = cLim + yangmeiRatio / (totalRatio || 1);
+
+    const nextParticles: Particle[] = [];
+
+    for (let i = 0; i < targetCount; i++) {
+      const rand = Math.random();
+      let type: ParticleType = 'celadon';
+      let shape: 'octagon' | 'circle' | 'hexagon' = 'octagon';
+      let baseSize = celadonSize;
+      let colors = CELLADON_COLORS;
+
+      if (rand < cLim) {
+        type = 'celadon';
+        shape = 'octagon';
+        baseSize = celadonSize;
+        colors = CELLADON_COLORS;
+      } else if (rand < yLim) {
+        type = 'yangmei';
+        shape = 'circle';
+        baseSize = yangmeiSize;
+        colors = YANGMEI_COLORS;
+      } else {
+        type = 'appliance';
+        shape = 'hexagon';
+        baseSize = applianceSize;
+        colors = APPLIANCE_COLORS;
+      }
+
+      // Pick a random color from the tier list
+      const color = colors[Math.floor(Math.random() * colors.length)];
+
+      // Position: Spread out if the current population was empty, else reuse or morph
+      const existing = currentParticles[i];
+      let x = cx;
+      let y = cy;
+      let vx = (Math.random() - 0.5) * 2;
+      let vy = (Math.random() - 0.5) * 2;
+      let angle = Math.random() * Math.PI * 2;
+
+      if (existing) {
+        // Keep position but morph type / color / size
+        x = existing.x;
+        y = existing.y;
+        vx = existing.vx;
+        vy = existing.vy;
+        angle = existing.angle;
+      } else {
+        // Spawn randomly scattered
+        const rSpawn = Math.random() * Math.min(width, height) * 0.45;
+        const angleSpawn = Math.random() * Math.PI * 2;
+        x = cx + Math.cos(angleSpawn) * rSpawn;
+        y = cy + Math.sin(angleSpawn) * rSpawn;
+      }
+
+      // Slightly vary particle individual sizes
+      const size = Math.max(2, baseSize * (0.6 + Math.random() * 0.8));
+
+      nextParticles.push({
+        id: i,
+        type,
+        shape,
+        x,
+        y,
+        targetX: x,
+        targetY: y,
+        vx,
+        vy,
+        size,
+        color,
+        alpha: 0.1, // fade in
+        angle,
+        spinSpeed: (Math.random() - 0.5) * 0.04,
+      });
+    }
+
+    particlesRef.current = nextParticles;
+  };
+
+  // Trigger regeneration on ratio/size adjustments
+  useEffect(() => {
+    regenerateParticles(450);
+  }, [celadonRatio, yangmeiRatio, applianceRatio, celadonSize, yangmeiSize, applianceSize, dimensions.width, dimensions.height]);
+
+  // Adjust particle targets based on Active Modes
+  useEffect(() => {
+    const list = particlesRef.current;
+    const { width, height } = dimensions;
+    const cx = width / 2;
+    const cy = height / 2;
+    const R = Math.min(width, height) * 0.28; // Outer circle radius
+
+    if (mode === 'diffusion') {
+      // Disperse outward from center or current hub with velocity bursts
+      list.forEach((p) => {
+        const dx = p.x - cx;
+        const dy = p.y - cy;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        // Radial outward target
+        const force = 3 + Math.random() * 8;
+        p.vx = (dx / dist) * force;
+        p.vy = (dy / dist) * force;
+        // set random outer targets
+        p.targetX = cx + (dx / dist) * (R * (1.2 + Math.random() * 1.5));
+        p.targetY = cy + (dy / dist) * (R * (1.2 + Math.random() * 1.5));
+      });
+    } else if (mode === 'gather') {
+      // Aggregate into center or concentric small clusters
+      list.forEach((p, idx) => {
+        // Multi-hub aggregation based on category for nice aesthetics
+        let ox = 0;
+        let oy = 0;
+        if (p.type === 'celadon') {
+          ox = -40; // Celadon clustered left
+        } else if (p.type === 'yangmei') {
+          oy = -40; // Yangmei clustered up
+        } else {
+          ox = 40; // Appliance clustered right
+        }
+        p.targetX = cx + ox + (Math.random() - 0.5) * 80;
+        p.targetY = cy + oy + (Math.random() - 0.5) * 80;
+      });
+    } else if (mode === 'circle') {
+      // Align neatly over a big outer hollow circle boundary
+      list.forEach((p, idx) => {
+        const theta = (idx / list.length) * Math.PI * 2;
+        p.targetX = cx + Math.cos(theta) * R + (Math.random() - 0.5) * 12;
+        p.targetY = cy + Math.sin(theta) * R + (Math.random() - 0.5) * 12;
+      });
+    } else if (mode === 'solid_circle') {
+      // Align beautifully inside a solid circle (实心圆) using the Golden Spiral (Vogel's spiral) for an absolute gorgeous packed effect
+      list.forEach((p, idx) => {
+        const goldenAngle = Math.PI * (3 - Math.sqrt(5)); // Golden Angle of rotation
+        const theta = idx * goldenAngle;
+        const rFactor = Math.sqrt(idx / list.length); // Area-even density
+        const targetRadius = R * rFactor * 1.05; // solid radius size
+
+        p.targetX = cx + Math.cos(theta) * targetRadius;
+        p.targetY = cy + Math.sin(theta) * targetRadius;
+      });
+    } else if (mode === 'chaos') {
+      // Spread wildly across borders
+      list.forEach((p) => {
+        p.targetX = Math.random() * width;
+        p.targetY = Math.random() * height;
+        p.vx = (Math.random() - 0.5) * 4;
+        p.vy = (Math.random() - 0.5) * 4;
+      });
+    } else {
+      // Idle floating
+      list.forEach((p) => {
+        // drift slightly
+        p.targetX = p.x + (Math.random() - 0.5) * 100;
+        p.targetY = p.y + (Math.random() - 0.5) * 100;
+      });
+    }
+  }, [mode, dimensions]);
+
+  // Render & Physics Tick Loop
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Regular Polygons rendering functions
+    const drawPolygon = (
+      c: CanvasRenderingContext2D,
+      cx: number,
+      cy: number,
+      r: number,
+      sides: number,
+      angle: number,
+      color: string,
+      alpha: number
+    ) => {
+      c.save();
+      c.globalAlpha = alpha;
+      c.fillStyle = color;
+      c.beginPath();
+      for (let i = 0; i < sides; i++) {
+        const a = angle + (i * 2 * Math.PI) / sides;
+        const x = cx + r * Math.cos(a);
+        const y = cy + r * Math.sin(a);
+        if (i === 0) {
+          c.moveTo(x, y);
+        } else {
+          c.lineTo(x, y);
+        }
+      }
+      c.closePath();
+      c.shadowBlur = 4;
+      c.shadowColor = color;
+      c.fill();
+      c.restore();
+    };
+
+    const drawCircleShape = (
+      c: CanvasRenderingContext2D,
+      cx: number,
+      cy: number,
+      r: number,
+      color: string,
+      alpha: number
+    ) => {
+      c.save();
+      c.globalAlpha = alpha;
+      c.fillStyle = color;
+      c.beginPath();
+      c.arc(cx, cy, r, 0, 2 * Math.PI);
+      c.shadowBlur = 4;
+      c.shadowColor = color;
+      c.fill();
+      c.restore();
+    };
+
+    let lastTime = 0;
+    let blendTimer = 0;
+
+    // Calculate aggregated stats & blended color
+    const calculateLiveStats = () => {
+      const list = particlesRef.current;
+      let sumR = 0, sumG = 0, sumB = 0;
+      let validColorCount = 0;
+      let celadonCount = 0;
+      let yangmeiCount = 0;
+      let applianceCount = 0;
+      let sizeSum = 0;
+
+      list.forEach((p) => {
+        sizeSum += p.size;
+        if (p.type === 'celadon') celadonCount++;
+        else if (p.type === 'yangmei') yangmeiCount++;
+        else if (p.type === 'appliance') applianceCount++;
+
+        // Helper to convert hex to rgb
+        const hex = p.color;
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        if (result) {
+          sumR += parseInt(result[1], 16);
+          sumG += parseInt(result[2], 16);
+          sumB += parseInt(result[3], 16);
+          validColorCount++;
+        }
+      });
+
+      // Calculate the gorgeous weighted blend color of the whole region!
+      let blendedColor = '#709a95'; // default
+      if (validColorCount > 0) {
+        const avgR = Math.round(sumR / validColorCount);
+        const avgG = Math.round(sumG / validColorCount);
+        const avgB = Math.round(sumB / validColorCount);
+        blendedColor = `#${((1 << 24) + (avgR << 16) + (avgG << 8) + avgB).toString(16).slice(1)}`;
+      }
+
+      onStatsUpdate?.({
+        total: list.length,
+        celadonCount,
+        yangmeiCount,
+        applianceCount,
+        averageSize: Number((sizeSum / (list.length || 1)).toFixed(1)),
+        blendedColor,
+      });
+    };
+
+    const tick = (timestamp: number) => {
+      if (!lastTime) lastTime = timestamp;
+      const dt = Math.min(50, timestamp - lastTime); // cap dt
+      lastTime = timestamp;
+
+      // Dark futuristic overlay to allow subtle neon trails
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.25)'; // slate-900 with nice transparent decay
+      ctx.fillRect(0, 0, dimensions.width, dimensions.height);
+
+      const list = particlesRef.current;
+      const cx = dimensions.width / 2;
+      const cy = dimensions.height / 2;
+
+      // Update and draw particles
+      list.forEach((p) => {
+        // Handle fading in
+        if (p.alpha < 0.95) {
+          p.alpha += 0.03;
+        }
+
+        // Apply physical movements based on modes
+        const sp = speedFactor * 0.08;
+
+        if (mode === 'diffusion') {
+          // Friction slowing down after radial blast
+          p.x += p.vx * (dt / 16);
+          p.y += p.vy * (dt / 16);
+          p.vx *= 0.94;
+          p.vy *= 0.94;
+
+          // Gentle attraction to target post-burst
+          p.x += (p.targetX - p.x) * (0.015 * sp);
+          p.y += (p.targetY - p.y) * (0.015 * sp);
+        } else if (mode === 'gather' || mode === 'circle' || mode === 'solid_circle') {
+          // Swift tight interpolation to targeted positions
+          p.x += (p.targetX - p.x) * (0.05 * sp);
+          p.y += (p.targetY - p.y) * (0.05 * sp);
+          // Friction to settle
+          p.vx = 0;
+          p.vy = 0;
+        } else if (mode === 'chaos') {
+          // Keep floating fast with boundaries bouncing
+          p.x += p.vx * (dt / 8) * speedFactor;
+          p.y += p.vy * (dt / 8) * speedFactor;
+
+          if (p.x < 0 || p.x > dimensions.width) p.vx *= -1;
+          if (p.y < 0 || p.y > dimensions.height) p.vy *= -1;
+        } else {
+          // 'idle' floating - particles rotate slightly and drift
+          p.angle += p.spinSpeed;
+
+          // Keep them orbiting the center lightly for dynamic aesthetics
+          const dx = p.x - cx;
+          const dy = p.y - cy;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          
+          // Tangential orbital velocity + radial correction to stay inside a bounds
+          const orbitForce = 0.4 * speedFactor;
+          const tx = -dy / dist;
+          const ty = dx / dist;
+
+          // add slight noise
+          p.vx += (tx * orbitForce + (Math.random() - 0.5) * 0.2 - dx * 0.0001) * 0.05;
+          p.vy += (ty * orbitForce + (Math.random() - 0.5) * 0.2 - dy * 0.0001) * 0.05;
+
+          // Speed limit
+          const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+          const limit = 1.8 * speedFactor;
+          if (speed > limit) {
+            p.vx = (p.vx / speed) * limit;
+            p.vy = (p.vy / speed) * limit;
+          }
+
+          p.x += p.vx * (dt / 16);
+          p.y += p.vy * (dt / 16);
+
+          // Bound constraint
+          if (p.x < 10) { p.x = 10; p.vx *= -1; }
+          if (p.x > dimensions.width - 10) { p.x = dimensions.width - 10; p.vx *= -1; }
+          if (p.y < 10) { p.y = 10; p.vy *= -1; }
+          if (p.y > dimensions.height - 10) { p.y = dimensions.height - 10; p.vy *= -1; }
+        }
+
+        // Spin regular shapes
+        p.angle += p.spinSpeed;
+
+        // Dynamic sizing factor per-particle based on active mode and particle type
+        let sizeScale = 1.0;
+        if (mode === 'diffusion') {
+          // Celadon balloons, yangmei breaks to tiny embers, appliance grows a bit
+          if (p.type === 'celadon') sizeScale = 1.7;
+          else if (p.type === 'yangmei') sizeScale = 0.55;
+          else if (p.type === 'appliance') sizeScale = 1.35;
+        } else if (mode === 'gather') {
+          // Celadon shrinks, yangmei expands, appliance shrinks slightly
+          if (p.type === 'celadon') sizeScale = 0.5;
+          else if (p.type === 'yangmei') sizeScale = 1.8;
+          else if (p.type === 'appliance') sizeScale = 0.8;
+        } else if (mode === 'solid_circle') {
+          // Solid packed circle slightly breathes to show vibrant organic force
+          const freq = p.type === 'celadon' ? 0.003 : p.type === 'yangmei' ? 0.004 : 0.002;
+          sizeScale = 0.95 + 0.15 * Math.sin(timestamp * freq + p.id);
+        } else if (mode === 'circle') {
+          // Hollow ring holds steady sizes
+          sizeScale = 1.05;
+        } else if (mode === 'chaos') {
+          // Dynamic high energy collision sizing
+          const rate = p.type === 'celadon' ? 0.006 : p.type === 'yangmei' ? 0.008 : 0.005;
+          sizeScale = 0.7 + 0.65 * Math.sin(timestamp * rate + p.id * 0.5);
+        } else {
+          // Idle floating swirly gentle breathing
+          const rate = p.type === 'celadon' ? 0.002 : p.type === 'yangmei' ? 0.0025 : 0.0015;
+          sizeScale = 0.95 + 0.15 * Math.sin(timestamp * rate + p.id * 0.2);
+        }
+
+        const renderSize = Math.max(1.8, p.size * sizeScale);
+
+        // Draw individual shape with dynamic scaled size
+        if (p.shape === 'octagon') {
+          drawPolygon(ctx, p.x, p.y, renderSize, 8, p.angle, p.color, p.alpha);
+        } else if (p.shape === 'hexagon') {
+          drawPolygon(ctx, p.x, p.y, renderSize, 6, p.angle, p.color, p.alpha);
+        } else {
+          drawCircleShape(ctx, p.x, p.y, renderSize, p.color, p.alpha);
+        }
+      });
+
+      // Draw active mode subtitle in canvas corner gracefully
+      ctx.save();
+      ctx.font = '11px ui-monospace, SFMono-Regular, "JetBrains Mono", monospace';
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.4)';
+      let modeText = '模式: 自由流体漂移 (IDLE)';
+      if (mode === 'diffusion') modeText = '模式: 爆发性漫射粒子 (DIFFUSION)';
+      else if (mode === 'gather') modeText = '模式: 轴心多集群聚集 (GATHER)';
+      else if (mode === 'circle') modeText = '模式: 圆环排列几何叙事 (HOLLOW CIRCLE)';
+      else if (mode === 'solid_circle') modeText = '模式: 实心黄金螺线晶圆 (SOLID DISC CIRCLE)';
+      else if (mode === 'chaos') modeText = '模式: 高能无序碰撞 (CHAOS)';
+      ctx.fillText(modeText, 16, dimensions.height - 16);
+      ctx.restore();
+
+      // Trigger stats update once in a while to save performance
+      blendTimer += dt;
+      if (blendTimer > 300) {
+        calculateLiveStats();
+        blendTimer = 0;
+      }
+
+      animationFrameId.current = requestAnimationFrame(tick);
+    };
+
+    animationFrameId.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (animationFrameId.current) {
+        cancelAnimationFrame(animationFrameId.current);
+      }
+    };
+  }, [dimensions, mode, speedFactor, onStatsUpdate]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative w-full h-[460px] md:h-[500px] rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 shadow-2xl flex items-center justify-center"
+      id="particle-canvas-container"
+    >
+      {/* Absolute canvas inside */}
+      <canvas
+        ref={canvasRef}
+        className="block w-full h-full cursor-crosshair"
+        id="particle-active-canvas"
+      />
+
+      {/* Decorative corners */}
+      <div className="absolute top-4 left-4 font-mono text-[10px] text-teal-400 select-none pointer-events-none opacity-80 backdrop-blur-md bg-slate-900/60 px-2 py-1 rounded border border-slate-800/80">
+        SYS.ENGINE_V1 // 粒子实时渲染
+      </div>
+      <div className="absolute top-4 right-4 font-mono text-[10px] text-pink-400 select-none pointer-events-none opacity-80 backdrop-blur-md bg-slate-900/60 px-2 py-1 rounded border border-slate-800/80">
+        FP60_ACCEL : ACTIVE
+      </div>
+    </div>
+  );
+}

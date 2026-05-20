@@ -1,0 +1,6 @@
+{
+  "name": "粒子色彩叙事沙盒",
+  "description": "展示三种不同颜色和形状粒子（八边形青瓷、圆形杨梅、六边形家电）的扩散、聚集与地铁色彩叙事动态交互系统。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
