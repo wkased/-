@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Particle, ParticleType } from '../types';
 import { Video, Camera } from 'lucide-react';
 
@@ -44,6 +44,42 @@ export default function ParticleCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<Particle[]>([]);
   const animationFrameId = useRef<number | null>(null);
+  const mouseRef = useRef<{ x: number | null; y: number | null }>({ x: null, y: null });
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    const scaleX = dimensions.width / rect.width;
+    const scaleY = dimensions.height / rect.height;
+    
+    mouseRef.current = { x: x * scaleX, y: y * scaleY };
+  };
+
+  const handleMouseLeave = () => {
+    mouseRef.current = { x: null, y: null };
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas || e.touches.length === 0) return;
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+    
+    const scaleX = dimensions.width / rect.width;
+    const scaleY = dimensions.height / rect.height;
+    
+    mouseRef.current = { x: x * scaleX, y: y * scaleY };
+  };
+
+  const handleTouchEnd = () => {
+    mouseRef.current = { x: null, y: null };
+  };
 
   const [dimensions, setDimensions] = useState({ width: 600, height: 450 });
 
@@ -126,6 +162,15 @@ export default function ParticleCanvas({
       // Pick a random color from the current dynamic array
       const color = colors[Math.floor(Math.random() * colors.length)] || '#cccccc';
 
+      const matchColor = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(color);
+      const tr = matchColor ? parseInt(matchColor[1], 16) : 200;
+      const tg = matchColor ? parseInt(matchColor[2], 16) : 200;
+      const tb = matchColor ? parseInt(matchColor[3], 16) : 200;
+
+      let r = tr;
+      let g = tg;
+      let b = tb;
+
       // Position: Spread out if the current population was empty, else reuse or morph
       const existing = currentParticles[i];
       let x = cx;
@@ -141,6 +186,10 @@ export default function ParticleCanvas({
         vx = existing.vx;
         vy = existing.vy;
         angle = existing.angle;
+        // Keep previous RGB values as the starting point for transitions
+        r = existing.r !== undefined ? existing.r : tr;
+        g = existing.g !== undefined ? existing.g : tg;
+        b = existing.b !== undefined ? existing.b : tb;
       } else {
         // Spawn randomly scattered
         const rSpawn = Math.random() * Math.min(width, height) * 0.45;
@@ -163,10 +212,16 @@ export default function ParticleCanvas({
         vx,
         vy,
         size,
-        color,
+        color: `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`,
         alpha: 0.1, // fade in
         angle,
         spinSpeed: (Math.random() - 0.5) * 0.04,
+        r,
+        g,
+        b,
+        tr,
+        tg,
+        tb,
       });
     }
 
@@ -831,8 +886,45 @@ export default function ParticleCanvas({
           if (p.y > dimensions.height - 10) { p.y = dimensions.height - 10; p.vy *= -1; }
         }
 
+        // Mouse/Touch Repelling Push Force Physics
+        const mouse = mouseRef.current;
+        let isPushed = false;
+        let pushAmount = 0;
+        
+        if (mouse.x !== null && mouse.y !== null) {
+          const dx = p.x - mouse.x;
+          const dy = p.y - mouse.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const threshold = 90; // px repulsion field
+          
+          if (dist < threshold && dist > 0.1) {
+            isPushed = true;
+            pushAmount = (threshold - dist) / threshold; // 1 at center, 0 at edge
+            
+            // Calculate push displacement vector
+            const repelStrength = pushAmount * 4.2 * Math.max(0.5, speedFactor);
+            p.x += (dx / dist) * repelStrength;
+            p.y += (dy / dist) * repelStrength;
+            
+            // Soft boundaries containment
+            if (p.x < 5) p.x = 5;
+            if (p.x > dimensions.width - 5) p.x = dimensions.width - 5;
+            if (p.y < 5) p.y = 5;
+            if (p.y > dimensions.height - 5) p.y = dimensions.height - 5;
+          }
+        }
+
         // Spin regular shapes
         p.angle += p.spinSpeed;
+
+        // Smooth color transition gradient morphing (interpolates current to target RGB channels)
+        if (p.r !== undefined && p.tr !== undefined && p.g !== undefined && p.tg !== undefined && p.b !== undefined && p.tb !== undefined) {
+          const transitionRate = 0.048 * Math.max(0.4, speedFactor);
+          p.r += (p.tr - p.r) * transitionRate;
+          p.g += (p.tg - p.g) * transitionRate;
+          p.b += (p.tb - p.b) * transitionRate;
+          p.color = `rgb(${Math.round(p.r)}, ${Math.round(p.g)}, ${Math.round(p.b)})`;
+        }
 
         // Dynamic sizing factor per-particle based on active mode and particle type
         let sizeScale = 1.0;
@@ -886,13 +978,44 @@ export default function ParticleCanvas({
 
         const renderSize = Math.max(1.8, p.size * sizeScale);
 
-        // Draw individual shape with dynamic scaled size
+        // Chromatic Color Shifting Flare
+        let renderColor = p.color;
+        if (isPushed && pushAmount > 0) {
+          const hex = p.color;
+          const match = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+          if (match) {
+            let r = parseInt(match[1], 16);
+            let g = parseInt(match[2], 16);
+            let b = parseInt(match[3], 16);
+            
+            // Adjust RGB components to shift hue
+            if (p.type === 'celadon') {
+              // Celadon -> Shimmers glowing teal/turquoise
+              r = Math.min(255, r + pushAmount * 30);
+              g = Math.min(255, g + pushAmount * 85);
+              b = Math.min(255, b + pushAmount * 65);
+            } else if (p.type === 'yangmei') {
+              // Yangmei -> Shimmers glowing intense warm ember/orange
+              r = Math.min(255, r + pushAmount * 115);
+              g = Math.min(255, g + pushAmount * 45);
+              b = Math.min(255, b + pushAmount * 20);
+            } else {
+              // Appliance -> Shimmers glowing space electric blue/indigo
+              r = Math.min(255, r + pushAmount * 60);
+              g = Math.min(255, g + pushAmount * 40);
+              b = Math.min(255, b + pushAmount * 110);
+            }
+            renderColor = `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
+          }
+        }
+
+        // Draw individual shape with dynamic scaled size and glowing color
         if (p.shape === 'octagon') {
-          drawPolygon(ctx, p.x, p.y, renderSize, 8, p.angle, p.color, p.alpha);
+          drawPolygon(ctx, p.x, p.y, renderSize, 8, p.angle, renderColor, p.alpha);
         } else if (p.shape === 'hexagon') {
-          drawPolygon(ctx, p.x, p.y, renderSize, 6, p.angle, p.color, p.alpha);
+          drawPolygon(ctx, p.x, p.y, renderSize, 6, p.angle, renderColor, p.alpha);
         } else {
-          drawCircleShape(ctx, p.x, p.y, renderSize, p.color, p.alpha);
+          drawCircleShape(ctx, p.x, p.y, renderSize, renderColor, p.alpha);
         }
       });
 
@@ -945,6 +1068,10 @@ export default function ParticleCanvas({
       {/* Absolute canvas inside */}
       <canvas
         ref={canvasRef}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         className="block w-full h-full cursor-crosshair"
         id="particle-active-canvas"
       />

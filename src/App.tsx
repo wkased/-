@@ -66,6 +66,21 @@ export default function App() {
     });
     setCurrentStationId(station.id);
 
+    // Apply specific thematic color ranges corresponding to each station's unique role and narrative
+    if (station.id === 'start') {
+      setCeladonColors(['#1e5046', '#3b7367', '#5f9d91', '#8dbdb5', '#c1e3dd']);
+      setYangmeiColors(['#4c1735', '#6b1c43', '#8f2553', '#b83b6c']);
+      setApplianceColors(['#1d1f23', '#2d3036', '#414751', '#324a5e']);
+    } else if (station.id === 'middle') {
+      setCeladonColors(['#30554f', '#467269', '#64948a', '#84b4aa']);
+      setYangmeiColors(['#691849', '#911b51', '#bf2e6b', '#e0538a', '#ff8cae']);
+      setApplianceColors(['#1e212b', '#393c4e', '#5e627c', '#405473']);
+    } else if (station.id === 'terminal') {
+      setCeladonColors(['#2d4440', '#415e58', '#5b7a74', '#70918b']);
+      setYangmeiColors(['#3b0f2a', '#4a1534', '#5e2045', '#722a57']);
+      setApplianceColors(['#111315', '#24282c', '#3c4046', '#1d4ed8', '#3b82f6', '#93c5fd']);
+    }
+
     // Phase 1: Explode outward (diffusion) with the new ratios & sizes!
     setActiveMode('diffusion');
 

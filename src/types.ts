@@ -24,6 +24,13 @@ export interface Particle {
   alpha: number;
   angle: number;
   spinSpeed: number;
+  // Dynamic color transition channels
+  r?: number;
+  g?: number;
+  b?: number;
+  tr?: number;
+  tg?: number;
+  tb?: number;
 }
 
 export interface Station {
