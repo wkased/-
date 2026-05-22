@@ -27,7 +27,18 @@ export default function App() {
   });
 
   const [speedFactor, setSpeedFactor] = useState(1.0);
-  const [activeMode, setActiveMode] = useState<'idle' | 'diffusion' | 'gather' | 'circle' | 'solid_circle' | 'chaos'>('idle');
+  const [activeMode, setActiveMode] = useState<'idle' | 'diffusion' | 'gather' | 'circle' | 'solid_circle' | 'chaos' | 'icon_subway' | 'icon_celadon' | 'icon_yangmei' | 'icon_appliance' | 'icon_custom'>('idle');
+  const [customPixels, setCustomPixels] = useState<{ r: number; c: number }[]>([
+    { r: 2, c: 3 }, { r: 2, c: 4 }, { r: 2, c: 9 }, { r: 2, c: 10 },
+    { r: 3, c: 2 }, { r: 3, c: 5 }, { r: 3, c: 8 }, { r: 3, c: 11 },
+    { r: 4, c: 1 }, { r: 4, c: 6 }, { r: 4, c: 7 }, { r: 4, c: 12 },
+    { r: 5, c: 1 }, { r: 5, c: 12 },
+    { r: 6, c: 2 }, { r: 6, c: 11 },
+    { r: 7, c: 3 }, { r: 7, c: 10 },
+    { r: 8, c: 4 }, { r: 8, c: 9 },
+    { r: 9, c: 5 }, { r: 9, c: 8 },
+    { r: 10, c: 6 }, { r: 10, c: 7 }
+  ]);
   const [currentStationId, setCurrentStationId] = useState<string>('start');
   const [isAutoRiding, setIsAutoRiding] = useState(false);
 
@@ -282,6 +293,7 @@ export default function App() {
               celadonColors={celadonColors}
               yangmeiColors={yangmeiColors}
               applianceColors={applianceColors}
+              customPixels={customPixels}
               onStatsUpdate={setStats}
             />
 
@@ -289,17 +301,17 @@ export default function App() {
             <div className="p-4 bg-slate-900/40 rounded-2xl border border-slate-800 text-xs text-slate-400 space-y-2">
               <div className="font-bold text-slate-300 flex items-center gap-1.5">
                 <span className="text-indigo-400">❖</span>
-                交互操作指引：如何感受“扩散、聚集、形成圆形”？
+                交互操作指引：如何感受“扩散、聚集、形成图腾”？
               </div>
               <ul className="list-disc list-inside space-y-1 text-[11px] leading-relaxed text-slate-400 pl-1">
                 <li>
-                  您可以点击上方的 <strong className="text-slate-200">“动态漫射爆破”</strong> 按钮，或者在下方改变站点。系统会自动驱动全场粒子爆发散开（<span className="text-amber-400">扩散</span>），随后按比率重新自动聚集对齐成耀眼的完美圆形阵列（<span className="text-rose-400">形成圆形</span>），而后轻柔漂移。
+                  您可以点击上方的 <strong className="text-slate-200">“动态漫射爆破”</strong> 按钮，或者改变轨道站点。系统会自动驱动全场粒子爆发散开（<span className="text-amber-400">扩散</span>），随后按结构重新聚集对齐成耀眼的特色图腾或完美圆形阵列（<span className="text-rose-400">聚集</span>），而后轻柔漂移。
                 </li>
                 <li>
-                  点击横轴铁路上的 <strong className="text-slate-200">起点站 (秘色遗址)</strong>、<strong className="text-slate-200">中段站 (繁华都会)</strong> 或 <strong className="text-slate-200">园区站 (智造新城)</strong>，即可在感受行车叙事的同时，使粒子的占比、形状主导权重和单体尺寸瞬间完成自适应的时空变迁。
+                  点击横轴铁路上的 <strong className="text-slate-200">起点站 (秘色遗址)</strong>、<strong className="text-slate-200">中段站 (繁荣都会)</strong> 或 <strong className="text-slate-200">园区站 (智造新城)</strong>，粒子占比、单体尺寸与基础多边形将瞬间自适应在轨道上行车时空变异。
                 </li>
                 <li>
-                  在右侧的手动面板中，您可以手动随意拉拽三种粒子的配比滑块，系统使用了数学配平算法（其他成分自动补足100%），您可以获得无穷无尽的微观粒子云形态！
+                  在右侧的手动面板中，您可以随意拉滑块或者通过<b>粒子手绘设计板</b>直接手绘，粒子将忠实听从你的指令构成各种独特的定制图形！
                 </li>
               </ul>
             </div>
@@ -318,6 +330,8 @@ export default function App() {
               onChangeSpeed={setSpeedFactor}
               activeMode={activeMode}
               onSetMode={setActiveMode}
+              customPixels={customPixels}
+              onChangeCustomPixels={setCustomPixels}
             />
 
             {/* Dynamic visual algorithm narrative helper */}

@@ -9,11 +9,12 @@ interface ParticleCanvasProps {
   celadonSize: number;    // base size
   yangmeiSize: number;
   applianceSize: number;
-  mode: 'idle' | 'diffusion' | 'gather' | 'circle' | 'solid_circle' | 'chaos';
+  mode: 'idle' | 'diffusion' | 'gather' | 'circle' | 'solid_circle' | 'chaos' | 'icon_subway' | 'icon_celadon' | 'icon_yangmei' | 'icon_appliance' | 'icon_custom';
   speedFactor: number;
   celadonColors: string[];
   yangmeiColors: string[];
   applianceColors: string[];
+  customPixels?: { r: number; c: number }[];
   onStatsUpdate?: (stats: {
     total: number;
     celadonCount: number;
@@ -36,6 +37,7 @@ export default function ParticleCanvas({
   celadonColors,
   yangmeiColors,
   applianceColors,
+  customPixels = [],
   onStatsUpdate,
 }: ParticleCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -492,10 +494,271 @@ export default function ParticleCanvas({
       const cy = dimensions.height / 2;
 
       // Update and draw particles
+      const baseRadius = Math.min(dimensions.width, dimensions.height) * 0.38;
+      const N = list.length;
+
       list.forEach((p) => {
         // Handle fading in
         if (p.alpha < 0.95) {
           p.alpha += 0.03;
+        }
+
+        // Dynamic icon coordinate morphing targets on the fly!
+        if (mode === 'icon_subway') {
+          // Classic Metro/Subway symbol: Outer orbit double circles with a beautiful parallel 'H' tracks in center
+          if (p.id < 220) {
+            // Dynamic circle ring
+            const theta = (p.id / 220) * Math.PI * 2;
+            const r = baseRadius * 0.45 + 5.0 * Math.sin(p.id * 0.2 + timestamp * 0.002);
+            p.targetX = cx + Math.cos(theta) * r;
+            p.targetY = cy + Math.sin(theta) * r + 15;
+          } else if (p.id < 320) {
+            // Left track column
+            const relY = ((p.id - 220) / 100 - 0.5) * baseRadius * 0.52;
+            p.targetX = cx - baseRadius * 0.16;
+            p.targetY = cy + relY + 15;
+          } else if (p.id < 420) {
+            // Right track column
+            const relY = ((p.id - 320) / 100 - 0.5) * baseRadius * 0.52;
+            p.targetX = cx + baseRadius * 0.16;
+            p.targetY = cy + relY + 15;
+          } else {
+            // Inner track center horizontal connector
+            const relX = ((p.id - 420) / (N - 420 || 1) - 0.5) * baseRadius * 0.32;
+            p.targetX = cx + relX;
+            p.targetY = cy + 15;
+          }
+        } else if (mode === 'icon_celadon') {
+          // Famous Famen Temple Octagonal Celadon Vase ("八棱瓶") - Slender neck + faceted bulbous body
+          if (p.id < 160) {
+            // Narrow vertical fluted neck (8 facets columns)
+            const col = p.id % 8;
+            const layer = Math.floor(p.id / 8);
+            const t = -0.76 + 0.48 * (layer / 20.0);
+            const angle = col * (Math.PI / 4.0);
+            // Slight wave to simulate porcelain luster
+            const r = 18.0 + 3.2 * Math.cos(angle) + 1.2 * Math.sin(timestamp * 0.001 * speedFactor + layer * 0.35);
+            p.targetX = cx + Math.cos(angle) * r;
+            p.targetY = cy + t * baseRadius + 22;
+          } else if (p.id < 390) {
+            // Expanding faceted bulbous bottom (belly with 8 distinct ridges)
+            const col = (p.id - 160) % 8;
+            const layer = Math.floor((p.id - 160) / 8);
+            const pct = layer / 29.0; // 0 to 1
+            const t = -0.28 + 1.05 * pct;
+            
+            // Bulbous sinuous profile
+            const rBase = baseRadius * 0.48 * Math.sin(pct * Math.PI * 0.86 + 0.15);
+            const angle = col * (Math.PI / 4.0);
+            // Height-dependent octagonal faceting
+            p.targetX = cx + Math.cos(angle) * rBase;
+            p.targetY = cy + t * baseRadius + 22;
+          } else {
+            // Stable flared base ring at the bottom
+            const idx = p.id - 390;
+            const theta = (idx / (N - 390 || 1)) * Math.PI * 2;
+            const r = baseRadius * 0.22 + 4.0 * Math.cos(theta * 8.0);
+            p.targetX = cx + Math.cos(theta) * r;
+            p.targetY = cy + 0.78 * baseRadius + 22;
+          }
+        } else if (mode === 'icon_yangmei') {
+          // A natural premium cluster of multiple Yangmei berries ("一串杨梅") with leafy stems
+          if (p.id < 100) {
+            // Elegant stem and leaf veins at the cluster top
+            const idx = p.id;
+            if (idx < 35) {
+              // Main holding stem
+              const pct = idx / 35;
+              p.targetX = cx + pct * 12.0;
+              p.targetY = cy - baseRadius * 0.7 + pct * baseRadius * 0.38 - 10;
+            } else {
+              // Broad healthy leaves
+              const leafIdx = idx - 35;
+              const side = leafIdx % 2 === 0 ? -1 : 1;
+              const pct = Math.floor(leafIdx / 2) / 32;
+              const leafAngle = -Math.PI / 3.2 + side * (0.35 + 0.85 * pct);
+              const leafDist = baseRadius * 0.32 * Math.sin(pct * Math.PI);
+              const totalRadius = baseRadius * 0.48 * pct;
+              p.targetX = cx + Math.cos(leafAngle) * totalRadius + side * leafDist * 0.3 - 5;
+              p.targetY = cy - baseRadius * 0.52 + Math.sin(leafAngle) * totalRadius - 10;
+            }
+          } else if (p.id < 220) {
+            // Berry Globe A (Top Left Berry) with delicate granular nodules
+            const bodyIdx = p.id - 100;
+            const totalBody = 120;
+            const bx = cx - baseRadius * 0.28;
+            const by = cy + baseRadius * 0.18;
+            const theta = bodyIdx * 2.39996 + timestamp * 0.0003 * speedFactor;
+            const rFactor = Math.sqrt(bodyIdx / totalBody);
+            const rBase = baseRadius * 0.28 * rFactor;
+            // High-frequency sinuous perimeter bumps for authentic grape/bayberry skin
+            const bump = rBase > 5 ? 0.08 * rBase * Math.sin(16 * theta) : 0;
+            p.targetX = bx + Math.cos(theta) * (rBase + bump);
+            p.targetY = by + Math.sin(theta) * (rBase + bump);
+          } else if (p.id < 330) {
+            // Berry Globe B (Bottom Right Berry) with granular surface
+            const bodyIdx = p.id - 220;
+            const totalBody = 110;
+            const bx = cx + baseRadius * 0.28;
+            const by = cy + baseRadius * 0.25;
+            const theta = bodyIdx * 2.39996 + timestamp * 0.00025 * speedFactor;
+            const rFactor = Math.sqrt(bodyIdx / totalBody);
+            const rBase = baseRadius * 0.26 * rFactor;
+            const bump = rBase > 5 ? 0.08 * rBase * Math.sin(16 * theta) : 0;
+            p.targetX = bx + Math.cos(theta) * (rBase + bump);
+            p.targetY = by + Math.sin(theta) * (rBase + bump);
+          } else {
+            // Berry Globe C (Upper Center Berry)
+            const bodyIdx = p.id - 330;
+            const totalBody = N - 330 || 1;
+            const bx = cx + baseRadius * 0.02;
+            const by = cy - baseRadius * 0.16;
+            const theta = bodyIdx * 2.39996 + timestamp * 0.00035 * speedFactor;
+            const rFactor = Math.sqrt(bodyIdx / totalBody);
+            const rBase = baseRadius * 0.32 * rFactor;
+            const bump = rBase > 5 ? 0.08 * rBase * Math.sin(16 * theta) : 0;
+            p.targetX = bx + Math.cos(theta) * (rBase + bump);
+            p.targetY = by + Math.sin(theta) * (rBase + bump);
+          }
+        } else if (mode === 'icon_appliance') {
+          // Multi-appliance tech composition ("一些小家电"): Washing machine, screen, water kettle
+          if (p.id < 150) {
+            // Appliance 1: Washing Machine (circular inner door + outer cabinet rectangle)
+            const washIdx = p.id;
+            const wx = cx - baseRadius * 0.62;
+            const wy = cy + baseRadius * 0.12;
+            if (washIdx < 80) {
+              // Outer square cabinet boundary
+              const borderDist = (washIdx / 80) * 240; // perimeter
+              let px = 0, py = 0;
+              if (borderDist < 60) {
+                px = -30 + borderDist;
+                py = -40;
+              } else if (borderDist < 120) {
+                px = 30;
+                py = -40 + (borderDist - 60);
+              } else if (borderDist < 180) {
+                px = 30 - (borderDist - 120);
+                py = 40;
+              } else {
+                px = -30;
+                py = 40 - (borderDist - 180);
+              }
+              p.targetX = wx + px;
+              p.targetY = wy + py;
+            } else {
+              // Circular shiny washing drum door inside
+              const drumIdx = washIdx - 80;
+              const angle = drumIdx * 0.12 + timestamp * 0.003 * speedFactor;
+              const r = 18.0;
+              p.targetX = wx + Math.cos(angle) * r;
+              p.targetY = wy + Math.sin(angle) * r + 8;
+            }
+          } else if (p.id < 290) {
+            // Appliance 2: Widescreen TV / Smart Display
+            const tvIdx = p.id - 150;
+            const tx = cx + baseRadius * 0.02;
+            const ty = cy - baseRadius * 0.12;
+            if (tvIdx < 110) {
+              // Neat 16:9 thick border monitor frame
+              const borderDist = (tvIdx / 110) * 320;
+              let px = 0, py = 0;
+              if (borderDist < 100) {
+                px = -50 + borderDist;
+                py = -30;
+              } else if (borderDist < 160) {
+                px = 50;
+                py = -30 + (borderDist - 100);
+              } else if (borderDist < 260) {
+                px = 50 - (borderDist - 160);
+                py = 30;
+              } else {
+                px = -50;
+                py = 30 - (borderDist - 260);
+              }
+              p.targetX = tx + px;
+              p.targetY = ty + py;
+            } else {
+              // Widescreen table stand/support legs at the bottom
+              const standIdx = tvIdx - 110;
+              const px = -25 + (standIdx / 30) * 50;
+              const py = 30 + Math.abs(px) * 0.28;
+              p.targetX = tx + px;
+              p.targetY = ty + py;
+            }
+          } else {
+            // Appliance 3: Stylish aesthetic smart kettle with handle and spout
+            const ketIdx = p.id - 290;
+            const totalKet = N - 290 || 1;
+            const kx = cx + baseRadius * 0.65;
+            const ky = cy + baseRadius * 0.16;
+            
+            if (ketIdx < totalKet * 0.5) {
+              // Curved kettle metal wall
+              const pct = ketIdx / (totalKet * 0.5);
+              const angle = -Math.PI/2.2 + pct * Math.PI * 1.05;
+              const r = 24.0 + 3.0 * Math.sin(pct * Math.PI);
+              p.targetX = kx + Math.cos(angle) * r;
+              p.targetY = ky + pct * 65.0 - 32.5;
+            } else if (ketIdx < totalKet * 0.78) {
+              // Kettle grip handle
+              const pct = (ketIdx - totalKet * 0.5) / (totalKet * 0.28);
+              p.targetX = kx + 28.0 + Math.sin(pct * Math.PI) * 10.0;
+              p.targetY = ky - 20.0 + pct * 42.0;
+            } else {
+              // Spout and bottom platform
+              const pct = (ketIdx - totalKet * 0.78) / (totalKet * 0.22);
+              if (pct < 0.5) {
+                // Kettle spout on left
+                p.targetX = kx - 24.5 - pct * 11.0;
+                p.targetY = ky - 18.0 + pct * 12.0;
+              } else {
+                // Flat bottom plate
+                p.targetX = kx - 30.0 + (pct - 0.5) * 2.0 * 60.0;
+                p.targetY = ky + 34.0;
+              }
+            }
+          }
+        } else if (mode === 'icon_custom') {
+          // Fully user-defined pixel grid constellation morphing!
+          if (customPixels.length > 0) {
+            const cell = customPixels[p.id % customPixels.length];
+            // Normalize row and column from 0..13 to -1.0..+1.0 grid
+            const pxPct = (cell.c - 6.5) / 7.0;
+            const pyPct = (cell.r - 6.5) / 7.0;
+            
+            // Map out to canvas coordinates centered around (cx, cy)
+            const mapX = cx + pxPct * baseRadius * 1.15;
+            const mapY = cy + pyPct * baseRadius * 1.15 + 15;
+            
+            // Add light high-fidelity organic ripple wave so grid shines like living fiber strands
+            const swayX = 3.8 * Math.sin(timestamp * 0.0035 + p.id * 0.16) * (p.size / 6.0);
+            const swayY = 3.8 * Math.cos(timestamp * 0.003 + p.id * 0.12) * (p.size / 6.0);
+            
+            p.targetX = mapX + swayX;
+            p.targetY = mapY + swayY;
+          } else {
+            // Default "M" monogram for Metro path if canvas is entirely empty
+            const totalPart = N;
+            const t = p.id / totalPart;
+            let px = 0;
+            let py = 0;
+            if (t < 0.25) {
+              px = -60 + t * 4 * 30;
+              py = 40 - t * 4 * 80;
+            } else if (t < 0.5) {
+              px = -30 + (t - 0.25) * 4 * 30;
+              py = -40 + (t - 0.25) * 4 * 60;
+            } else if (t < 0.75) {
+              px = 0 + (t - 0.5) * 4 * 30;
+              py = 20 - (t - 0.5) * 4 * 60;
+            } else {
+              px = 30 + (t - 0.75) * 4 * 30;
+              py = -40 + (t - 0.75) * 4 * 80;
+            }
+            p.targetX = cx + px * (baseRadius / 80.0);
+            p.targetY = cy + py * (baseRadius / 80.0) + 12;
+          }
         }
 
         // Apply physical movements based on modes
@@ -511,10 +774,19 @@ export default function ParticleCanvas({
           // Gentle attraction to target post-burst
           p.x += (p.targetX - p.x) * (0.015 * sp);
           p.y += (p.targetY - p.y) * (0.015 * sp);
-        } else if (mode === 'gather' || mode === 'circle' || mode === 'solid_circle') {
+        } else if (
+          mode === 'gather' || 
+          mode === 'circle' || 
+          mode === 'solid_circle' ||
+          mode === 'icon_subway' ||
+          mode === 'icon_celadon' ||
+          mode === 'icon_yangmei' ||
+          mode === 'icon_appliance' ||
+          mode === 'icon_custom'
+        ) {
           // Swift tight interpolation to targeted positions
-          p.x += (p.targetX - p.x) * (0.05 * sp);
-          p.y += (p.targetY - p.y) * (0.05 * sp);
+          p.x += (p.targetX - p.x) * (0.055 * sp);
+          p.y += (p.targetY - p.y) * (0.055 * sp);
           p.vx = 0;
           p.vy = 0;
         } else if (mode === 'chaos') {
@@ -580,6 +852,33 @@ export default function ParticleCanvas({
         } else if (mode === 'chaos') {
           const rate = p.type === 'celadon' ? 0.006 : p.type === 'yangmei' ? 0.008 : 0.005;
           sizeScale = 0.7 + 0.65 * Math.sin(timestamp * rate + p.id * 0.5);
+        } else if (mode === 'icon_subway') {
+          sizeScale = 0.82 + 0.15 * Math.sin(timestamp * 0.003 + p.id * 0.08);
+        } else if (mode === 'icon_celadon') {
+          if (p.id < 160) {
+            sizeScale = 0.68; // slender delicate neck
+          } else {
+            sizeScale = 0.92 + 0.12 * Math.sin(timestamp * 0.0025 + p.id * 0.12); // faceted body
+          }
+        } else if (mode === 'icon_yangmei') {
+          if (p.id < 100) {
+            sizeScale = 0.58; // stem and leaf vein lining
+          } else {
+            sizeScale = 1.12 + 0.25 * Math.sin(timestamp * 0.005 + p.id * 0.25); // bumpy coarse berry skin
+          }
+        } else if (mode === 'icon_appliance') {
+          if (p.id < 150) {
+            // Washing Machine: door is bulkier, cabinet border is slender
+            sizeScale = p.id >= 80 ? 0.92 : 0.65;
+          } else if (p.id < 290) {
+            // Smart Wide TV Screen
+            sizeScale = p.id >= 260 ? 0.62 : 0.9;
+          } else {
+            // Kettle spire and spout
+            sizeScale = 0.82;
+          }
+        } else if (mode === 'icon_custom') {
+          sizeScale = 0.95 + 0.24 * Math.sin(timestamp * 0.004 + p.id * 0.18);
         } else {
           const rate = p.type === 'celadon' ? 0.002 : p.type === 'yangmei' ? 0.0025 : 0.0015;
           sizeScale = 0.95 + 0.15 * Math.sin(timestamp * rate + p.id * 0.2);
@@ -607,6 +906,11 @@ export default function ParticleCanvas({
       else if (mode === 'circle') modeText = '模式: 圆环排列几何叙事 (HOLLOW CIRCLE)';
       else if (mode === 'solid_circle') modeText = '模式: 实心黄金螺线晶圆 (SOLID DISC CIRCLE)';
       else if (mode === 'chaos') modeText = '模式: 高能无序碰撞 (CHAOS)';
+      else if (mode === 'icon_subway') modeText = '意象图标: 轨道交通地铁标 (METRO LOGO)';
+      else if (mode === 'icon_celadon') modeText = '意象图标: 秘色八棱青瓷瓶 (FAMEN OCTAGONAL VASE)';
+      else if (mode === 'icon_yangmei') modeText = '意象图标: 瑞丰仙居杨梅串 (YANGMEI CLUSTER BUNCH)';
+      else if (mode === 'icon_appliance') modeText = '意象图标: 智造小家电组合 (SMART HOME APPLIANCES)';
+      else if (mode === 'icon_custom') modeText = '手绘图标: 自由画板手绘图腾 (CUSTOM DESIGN PIXELS)';
       ctx.fillText(modeText, 16, dimensions.height - 16);
       ctx.restore();
 
@@ -630,7 +934,7 @@ export default function ParticleCanvas({
         cancelAnimationFrame(animationFrameId.current);
       }
     };
-  }, [dimensions, mode, speedFactor, onStatsUpdate, celadonColors, yangmeiColors, applianceColors]);
+  }, [dimensions, mode, speedFactor, onStatsUpdate, celadonColors, yangmeiColors, applianceColors, customPixels]);
 
   return (
     <div

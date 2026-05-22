@@ -1,4 +1,5 @@
-import { Sliders, LayoutGrid, Award, Volume2, Move, HelpCircle, AlertCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { Sliders, LayoutGrid, Award, Volume2, Move, HelpCircle, AlertCircle, Sparkles, Tv, Palette, Train } from 'lucide-react';
 
 interface ControlPanelProps {
   ratios: {
@@ -15,8 +16,10 @@ interface ControlPanelProps {
   onChangeSizes: (sizes: { celadon: number; yangmei: number; appliance: number }) => void;
   speedFactor: number;
   onChangeSpeed: (speed: number) => void;
-  activeMode: 'idle' | 'diffusion' | 'gather' | 'circle' | 'solid_circle' | 'chaos';
-  onSetMode: (mode: 'idle' | 'diffusion' | 'gather' | 'circle' | 'solid_circle' | 'chaos') => void;
+  activeMode: 'idle' | 'diffusion' | 'gather' | 'circle' | 'solid_circle' | 'chaos' | 'icon_subway' | 'icon_celadon' | 'icon_yangmei' | 'icon_appliance' | 'icon_custom';
+  onSetMode: (mode: 'idle' | 'diffusion' | 'gather' | 'circle' | 'solid_circle' | 'chaos' | 'icon_subway' | 'icon_celadon' | 'icon_yangmei' | 'icon_appliance' | 'icon_custom') => void;
+  customPixels: { r: number; c: number }[];
+  onChangeCustomPixels: (pixels: { r: number; c: number }[]) => void;
 }
 
 export default function ControlPanel({
@@ -28,6 +31,8 @@ export default function ControlPanel({
   onChangeSpeed,
   activeMode,
   onSetMode,
+  customPixels,
+  onChangeCustomPixels,
 }: ControlPanelProps) {
   const handleRatioChange = (type: 'celadon' | 'yangmei' | 'appliance', val: number) => {
     const rawVal = Math.min(100, Math.max(0, val));
@@ -49,6 +54,109 @@ export default function ControlPanel({
     }
     
     onChangeRatios(nextRatios);
+  };
+
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [drawValue, setDrawValue] = useState(true); // true = draw, false = erase
+
+  const handleMouseDown = (r: number, c: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDrawing(true);
+    const exists = customPixels.some((p) => p.r === r && p.c === c);
+    const nextVal = !exists;
+    setDrawValue(nextVal);
+    
+    let updated = [...customPixels];
+    if (nextVal) {
+      updated.push({ r, c });
+    } else {
+      updated = updated.filter((p) => !(p.r === r && p.c === c));
+    }
+    onChangeCustomPixels(updated);
+    onSetMode('icon_custom');
+  };
+
+  const handleMouseEnter = (r: number, c: number) => {
+    if (!isDrawing) return;
+    const exists = customPixels.some((p) => p.r === r && p.c === c);
+    let updated = [...customPixels];
+    if (drawValue && !exists) {
+      updated.push({ r, c });
+      onChangeCustomPixels(updated);
+      onSetMode('icon_custom');
+    } else if (!drawValue && exists) {
+      updated = updated.filter((p) => !(p.r === r && p.c === c));
+      onChangeCustomPixels(updated);
+      onSetMode('icon_custom');
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDrawing(false);
+  };
+
+  const handleClearGrid = () => {
+    onChangeCustomPixels([]);
+    onSetMode('icon_custom');
+  };
+
+  const handleApplyPreset = (presetType: 'metro' | 'heart' | 'smile' | 'star') => {
+    let preset: { r: number; c: number }[] = [];
+    if (presetType === 'metro') {
+      preset = [
+        { r: 1, c: 6 }, { r: 1, c: 7 },
+        { r: 2, c: 4 }, { r: 2, c: 5 }, { r: 2, c: 8 }, { r: 2, c: 9 },
+        { r: 3, c: 3 }, { r: 3, c: 10 },
+        { r: 4, c: 2 }, { r: 4, c: 11 },
+        { r: 5, c: 2 }, { r: 5, c: 11 },
+        { r: 6, c: 1 }, { r: 6, c: 12 },
+        { r: 7, c: 1 }, { r: 7, c: 12 },
+        { r: 8, c: 2 }, { r: 8, c: 11 },
+        { r: 9, c: 2 }, { r: 9, c: 11 },
+        { r: 10, c: 3 }, { r: 10, c: 10 },
+        { r: 11, c: 4 }, { r: 11, c: 5 }, { r: 11, c: 8 }, { r: 11, c: 9 },
+        { r: 12, c: 6 }, { r: 12, c: 7 },
+        { r: 4, c: 4 }, { r: 5, c: 4 }, { r: 6, c: 4 }, { r: 7, c: 4 }, { r: 8, c: 4 }, { r: 9, c: 4 },
+        { r: 4, c: 9 }, { r: 5, c: 9 }, { r: 6, c: 9 }, { r: 7, c: 9 }, { r: 8, c: 9 }, { r: 9, c: 9 },
+        { r: 6, c: 5 }, { r: 6, c: 6 }, { r: 6, c: 7 }, { r: 6, c: 8 }
+      ];
+    } else if (presetType === 'heart') {
+      preset = [
+        { r: 2, c: 3 }, { r: 2, c: 4 }, { r: 2, c: 9 }, { r: 2, c: 10 },
+        { r: 3, c: 2 }, { r: 3, c: 3 }, { r: 3, c: 4 }, { r: 3, c: 5 }, { r: 3, c: 8 }, { r: 3, c: 9 }, { r: 3, c: 10 }, { r: 3, c: 11 },
+        { r: 4, c: 1 }, { r: 4, c: 2 }, { r: 4, c: 3 }, { r: 4, c: 4 }, { r: 4, c: 5 }, { r: 4, c: 6 }, { r: 4, c: 7 }, { r: 4, c: 8 }, { r: 4, c: 9 }, { r: 4, c: 10 }, { r: 4, c: 11 }, { r: 4, c: 12 },
+        { r: 5, c: 1 }, { r: 5, c: 2 }, { r: 5, c: 3 }, { r: 5, c: 4 }, { r: 5, c: 5 }, { r: 5, c: 6 }, { r: 5, c: 7 }, { r: 5, c: 8 }, { r: 5, c: 9 }, { r: 5, c: 10 }, { r: 5, c: 11 }, { r: 5, c: 12 },
+        { r: 6, c: 2 }, { r: 6, c: 3 }, { r: 6, c: 4 }, { r: 6, c: 5 }, { r: 6, c: 6 }, { r: 6, c: 7 }, { r: 6, c: 8 }, { r: 6, c: 9 }, { r: 6, c: 10 }, { r: 6, c: 11 },
+        { r: 7, c: 3 }, { r: 7, c: 4 }, { r: 7, c: 5 }, { r: 7, c: 6 }, { r: 7, c: 7 }, { r: 7, c: 8 }, { r: 7, c: 9 },
+        { r: 8, c: 4 }, { r: 8, c: 5 }, { r: 8, c: 6 }, { r: 8, c: 7 }, { r: 8, c: 8 },
+        { r: 9, c: 5 }, { r: 9, c: 6 }, { r: 9, c: 7 }, { r: 9, c: 8 },
+        { r: 10, c: 6 }, { r: 10, c: 7 }
+      ];
+    } else if (presetType === 'smile') {
+      preset = [
+        { r: 4, c: 4 }, { r: 4, c: 9 },
+        { r: 5, c: 4 }, { r: 5, c: 9 },
+        { r: 8, c: 3 }, { r: 8, c: 10 },
+        { r: 9, c: 4 }, { r: 9, c: 9 },
+        { r: 10, c: 5 }, { r: 10, c: 6 }, { r: 10, c: 7 }, { r: 10, c: 8 }
+      ];
+    } else if (presetType === 'star') {
+      preset = [
+        { r: 1, c: 6 }, { r: 1, c: 7 },
+        { r: 2, c: 6 }, { r: 2, c: 7 },
+        { r: 3, c: 6 }, { r: 3, c: 7 },
+        { r: 4, c: 5 }, { r: 4, c: 6 }, { r: 4, c: 7 }, { r: 4, c: 8 },
+        { r: 5, c: 0 }, { r: 5, c: 1 }, { r: 5, c: 2 }, { r: 5, c: 3 }, { r: 5, c: 4 }, { r: 5, c: 5 }, { r: 5, c: 6 }, { r: 5, c: 7 }, { r: 5, c: 8 }, { r: 5, c: 9 }, { r: 5, c: 10 }, { r: 5, c: 11 }, { r: 5, c: 12 }, { r: 5, c: 13 },
+        { r: 6, c: 2 }, { r: 6, c: 3 }, { r: 6, c: 4 }, { r: 6, c: 5 }, { r: 6, c: 6 }, { r: 6, c: 7 }, { r: 6, c: 8 }, { r: 6, c: 9 }, { r: 6, c: 10 }, { r: 6, c: 11 },
+        { r: 7, c: 3 }, { r: 7, c: 4 }, { r: 7, c: 5 }, { r: 7, c: 6 }, { r: 7, c: 7 }, { r: 7, c: 8 }, { r: 7, c: 9 }, { r: 7, c: 10 },
+        { r: 8, c: 4 }, { r: 8, c: 5 }, { r: 8, c: 9 }, { r: 8, c: 8 },
+        { r: 9, c: 3 }, { r: 9, c: 4 }, { r: 9, c: 9 }, { r: 9, c: 10 },
+        { r: 10, c: 2 }, { r: 10, c: 3 }, { r: 10, c: 10 }, { r: 10, c: 11 },
+        { r: 11, c: 1 }, { r: 11, c: 12 }
+      ];
+    }
+    onChangeCustomPixels(preset);
+    onSetMode('icon_custom');
   };
 
   const handleSizeChange = (type: 'celadon' | 'yangmei' | 'appliance', val: number) => {
@@ -155,6 +263,164 @@ export default function ControlPanel({
             <span className="text-sm font-bold">⚡</span>
             <span>无序碰撞 (Chaos)</span>
           </button>
+        </div>
+
+        {/* Dynamic Icon Semantic Morph Controls */}
+        <div className="mt-5 border-t border-slate-800/80 pt-4">
+          <span className="text-[10px] font-mono tracking-widest text-[#94a3b8]/40 block uppercase">
+            SEMANTIC ICON TOTEMS // 特色地标意象
+          </span>
+          <h3 className="text-sm font-bold text-slate-200 flex items-center gap-1.5 mt-1">
+            <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+            沿线地标意象图腾变迁
+          </h3>
+          <p className="text-[11px] text-slate-400 mt-1.5 leading-normal">
+            打破常秩序，粒子随流体算法在轴向引力下自组装形成杭州地铁常用标、八棱秘色瓷瓶、累累杨梅串、工业智造新家电：
+          </p>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3.5">
+            {/* Subway Emblem Button */}
+            <button
+              onClick={() => onSetMode('icon_subway')}
+              className={`px-2 py-2.5 rounded-xl border text-[11px] font-semibold font-mono transition-all duration-300 flex flex-col items-center justify-center gap-1.5 cursor-pointer ${
+                activeMode === 'icon_subway'
+                  ? 'bg-blue-500/10 border-blue-500 text-blue-300 shadow-[0_0_15px_rgba(59,130,246,0.3)] scale-[1.02]'
+                  : 'bg-slate-950/40 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+              }`}
+              id="action-btn-icon-subway"
+              title="粒子汇聚成地铁交通标志"
+            >
+              <Train className="w-4 h-4 text-blue-400" />
+              <span>地铁常用标</span>
+            </button>
+
+            {/* Celadon Vase Button */}
+            <button
+              onClick={() => onSetMode('icon_celadon')}
+              className={`px-2 py-2.5 rounded-xl border text-[11px] font-semibold font-mono transition-all duration-300 flex flex-col items-center justify-center gap-1.5 cursor-pointer ${
+                activeMode === 'icon_celadon'
+                  ? 'bg-teal-500/10 border-teal-500 text-teal-300 shadow-[0_0_15px_rgba(20,184,166,0.3)] scale-[1.02]'
+                  : 'bg-slate-950/40 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+              }`}
+              id="action-btn-icon-celadon"
+              title="粒子汇聚成秘色八棱青瓷经典花瓶"
+            >
+              <Palette className="w-4 h-4 text-teal-400" />
+              <span>八棱青瓷瓶</span>
+            </button>
+
+            {/* Yangmei Berry Button */}
+            <button
+              onClick={() => onSetMode('icon_yangmei')}
+              className={`px-2 py-2.5 rounded-xl border text-[11px] font-semibold font-mono transition-all duration-300 flex flex-col items-center justify-center gap-1.5 cursor-pointer ${
+                activeMode === 'icon_yangmei'
+                  ? 'bg-rose-500/10 border-rose-500 text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.3)] scale-[1.02]'
+                  : 'bg-slate-950/40 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+              }`}
+              id="action-btn-icon-yangmei"
+              title="粒子汇聚成丰收一串杨梅"
+            >
+              <Sparkles className="w-4 h-4 text-rose-400" />
+              <span>一串杨梅</span>
+            </button>
+
+            {/* Appliance TV Button */}
+            <button
+              onClick={() => onSetMode('icon_appliance')}
+              className={`px-2 py-2.5 rounded-xl border text-[11px] font-semibold font-mono transition-all duration-300 flex flex-col items-center justify-center gap-1.5 cursor-pointer ${
+                activeMode === 'icon_appliance'
+                  ? 'bg-indigo-500/10 border-indigo-500 text-indigo-300 shadow-[0_0_15px_rgba(99,102,241,0.3)] scale-[1.02]'
+                  : 'bg-slate-950/40 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+              }`}
+              id="action-btn-icon-appliance"
+              title="粒子汇聚成智造小家电群集"
+            >
+              <Tv className="w-4 h-4 text-indigo-400" />
+              <span>一些小家电</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Interactive Custom Pixel Sketch Board */}
+        <div className="mt-5 border-t border-slate-800/80 pt-4" id="custom-pixel-sketch-container">
+          <span className="text-[10px] font-mono tracking-widest text-indigo-400 block uppercase">
+            PIXEL TEMPLATE DESIGNER // 粒子手绘交互
+          </span>
+          <h3 className="text-sm font-bold text-slate-200 flex items-center gap-1.5 mt-1">
+            <Move className="w-4 h-4 text-emerald-400 animate-bounce" />
+            自由粒子手绘图腾画板
+          </h3>
+          <p className="text-[11px] text-slate-400 mt-1.5 leading-normal">
+            点击或按住鼠标在下方 14×14 分子网格内拖拽，粒子即刻通过动力学算法逆流汇集、智能组装出你的手绘宇宙！
+          </p>
+
+          {/* Presets block */}
+          <div className="flex flex-wrap gap-1.5 mt-2.5 mb-3">
+            <button
+              onClick={() => handleApplyPreset('metro')}
+              className="px-2 py-1 text-[10.5px] font-semibold rounded-lg bg-indigo-950/40 border border-indigo-800/60 text-indigo-300 hover:bg-indigo-900/40 hover:text-indigo-200 active:scale-95 transition-all cursor-pointer"
+            >
+              地铁常用标
+            </button>
+            <button
+              onClick={() => handleApplyPreset('heart')}
+              className="px-2 py-1 text-[10.5px] font-semibold rounded-lg bg-indigo-950/40 border border-indigo-800/60 text-indigo-300 hover:bg-indigo-900/40 hover:text-indigo-200 active:scale-95 transition-all cursor-pointer"
+            >
+              爱心图腾
+            </button>
+            <button
+              onClick={() => handleApplyPreset('smile')}
+              className="px-2 py-1 text-[10.5px] font-semibold rounded-lg bg-indigo-950/40 border border-indigo-800/60 text-indigo-300 hover:bg-indigo-900/40 hover:text-indigo-200 active:scale-95 transition-all cursor-pointer"
+            >
+              笑脸迎客
+            </button>
+            <button
+              onClick={() => handleApplyPreset('star')}
+              className="px-2 py-1 text-[10.5px] font-semibold rounded-lg bg-indigo-950/40 border border-indigo-800/60 text-indigo-300 hover:bg-indigo-900/40 hover:text-indigo-200 active:scale-95 transition-all cursor-pointer"
+            >
+              璀璨繁星
+            </button>
+            <button
+              onClick={handleClearGrid}
+              className="px-2 py-1 text-[10.5px] font-semibold rounded-lg bg-rose-950/45 border border-rose-800/50 text-rose-300 hover:bg-rose-900/40 hover:text-rose-100 active:scale-95 transition-all cursor-pointer ml-auto"
+            >
+              清空画板
+            </button>
+          </div>
+
+          {/* Grid visual */}
+          <div className="flex justify-center p-3.5 rounded-xl bg-slate-950 border border-slate-900 shadow-inner">
+            <div 
+              className="grid grid-cols-14 gap-[3px] select-none"
+              onMouseLeave={handleMouseUp}
+              id="pixel-designer-grid-parent"
+            >
+              {Array.from({ length: 14 }).map((_, r) =>
+                Array.from({ length: 14 }).map((_, c) => {
+                  const isActive = customPixels.some((p) => p.r === r && p.c === c);
+                  return (
+                    <div
+                      key={`${r}-${c}`}
+                      onMouseDown={(e) => handleMouseDown(r, c, e)}
+                      onMouseEnter={() => handleMouseEnter(r, c)}
+                      onMouseUp={handleMouseUp}
+                      className={`w-3.5 h-3.5 rounded-sm transition-all duration-150 cursor-crosshair border ${
+                        isActive 
+                          ? 'bg-emerald-400 border-emerald-300 shadow-[0_0_8px_rgba(52,211,153,0.55)] scale-110 z-10' 
+                          : 'bg-slate-900/60 border-slate-800/70 hover:bg-slate-800'
+                      }`}
+                      title={`像素点 (${r}, ${c})`}
+                    />
+                  );
+                })
+              )}
+            </div>
+          </div>
+          <div className="mt-2 text-center text-[10px] font-mono text-slate-500">
+            {customPixels.length > 0 
+              ? `已激活 ${customPixels.length} 个像素磁轨 / 画板设计模式已生效` 
+              : '画板为空，在上方方格内涂鸦，或点击预设一键体验粒子重排'}
+          </div>
         </div>
       </div>
 
